@@ -28,7 +28,16 @@ function AdminDashboard() {
   const [newAdmin, setNewAdmin] = useState({ name: "", line: "" });
   const today = useMemo(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
+  const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7));
+  const [monthRules, setMonthRules] = useState<AvailabilityRule[]>([]);
   const [closure, setClosure] = useState({ startHour: "09", endHour: "10", ruleKind: "admin_lock", note: "" });
+  const monthRange = useMemo(() => {
+    const [year, month] = calendarMonth.split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    const next = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    return { start: `${calendarMonth}-01`, end: next, lastDay, firstWeekday: new Date(year, month - 1, 1).getDay() };
+  }, [calendarMonth]);
+  const calendarDays = useMemo(() => Array.from({ length: monthRange.firstWeekday + monthRange.lastDay }, (_, index) => index < monthRange.firstWeekday ? null : `${calendarMonth}-${String(index - monthRange.firstWeekday + 1).padStart(2, "0")}`), [calendarMonth, monthRange]);
 
   const request = async <T,>(url: string, options?: RequestInit): Promise<T> => {
     const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
@@ -50,6 +59,7 @@ function AdminDashboard() {
   useEffect(() => { void loadData().catch((issue) => { setAccessDenied(true); setError(issue instanceof Error ? issue.message : "無法取得管理權限"); }); }, []);
   useEffect(() => { if (!accessDenied) void request<Member[]>(`/api/admin/members?q=${encodeURIComponent(memberQuery)}`).then(setMembers).catch((issue) => setError(issue.message)); }, [memberQuery, accessDenied]);
   useEffect(() => { if (!accessDenied) void request<AvailabilityRule[]>(`/api/admin/availability?date=${selectedDate}`).then(setRules).catch((issue) => setError(issue.message)); }, [selectedDate, accessDenied]);
+  useEffect(() => { if (!accessDenied) void request<AvailabilityRule[]>(`/api/admin/availability?from=${monthRange.start}&to=${monthRange.end}`).then(setMonthRules).catch((issue) => setError(issue.message)); }, [calendarMonth, monthRange.start, monthRange.end, accessDenied]);
   const saveVenue = async (event: FormEvent) => {
     event.preventDefault(); setError("");
     try { const result = await request<{ display_name: string }>("/api/admin/venue", { method: "PUT", body: JSON.stringify({ displayName: venueName }) }); setVenueName(result.display_name); setNotice("場館名稱已儲存。"); }
@@ -70,18 +80,21 @@ function AdminDashboard() {
         resourceCodes, ruleKind: closure.ruleKind, note: closure.note || "管理員設定暫停預約",
       }) });
       setRules(await request<AvailabilityRule[]>(`/api/admin/availability?date=${selectedDate}`));
+      setMonthRules(await request<AvailabilityRule[]>(`/api/admin/availability?from=${monthRange.start}&to=${monthRange.end}`));
       setNotice(`${selectedDate} ${closure.startHour}:00–${closure.endHour}:00 已暫停預約。`);
     } catch (issue) { setError(issue instanceof Error ? issue.message : "時段更新失敗"); }
   };
   const removeRule = async (rule: AvailabilityRule) => {
     setError(""); setNotice("");
-    try { await request("/api/admin/availability", { method: "DELETE", body: JSON.stringify({ id: rule.id }) }); setRules((current) => current.filter((item) => item.id !== rule.id)); setNotice("此暫停時段已恢復開放。"); }
+    try { await request("/api/admin/availability", { method: "DELETE", body: JSON.stringify({ id: rule.id }) }); setRules((current) => current.filter((item) => item.id !== rule.id)); setMonthRules((current) => current.filter((item) => item.id !== rule.id)); setNotice("此暫停時段已恢復開放。"); }
     catch (issue) { setError(issue instanceof Error ? issue.message : "時段更新失敗"); }
   };
 
   if (accessDenied) return <main className={styles.loginPage}><section className={styles.loginCard}><p>LINE ADMIN</p><h1>尚未取得後台權限</h1><span>您已使用 LINE 登入，但此 LINE 帳號尚未被設定為管理員。請由既有管理員在會員名單中授權。</span>{error && <p className={styles.error}>{error}</p>}</section></main>;
 
   const closedHours = rules.reduce((sum, rule) => sum + Math.max(0, new Date(rule.ends_at).getTime() - new Date(rule.starts_at).getTime()) / 3_600_000, 0);
+  const closedDateKeys = new Set(monthRules.map((rule) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date(rule.starts_at))));
+  const moveMonth = (offset: number) => { const [year, month] = calendarMonth.split("-").map(Number); const date = new Date(year, month - 1 + offset, 1); setCalendarMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`); };
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/" className={styles.brand}>◒ {venueName}</Link><span>管理員後台</span></header>
     <section className={styles.intro}><p>ADMIN DASHBOARD</p><h1>場館管理中心</h1><span>所有後台異動會直接寫入 PostgreSQL 資料庫。</span></section>
@@ -90,8 +103,8 @@ function AdminDashboard() {
 
     {tab === "overview" && <Overview venueName={venueName} closedCount={closedHours} memberCount={members.length} />}
     {tab === "venue" && <section className={styles.gridTwo}>
-      <form className={styles.panel} onSubmit={saveVenue}><div className={styles.panelTitle}><div><p>VENUE PROFILE</p><h2>場館名稱</h2></div></div><label className={styles.field}>顯示名稱<input value={venueName} maxLength={40} onChange={(event) => setVenueName(event.target.value)} /></label><p className={styles.help}>名稱會顯示在會員預約頁面與 LINE 通知。儲存後會保留。</p><button className={styles.primaryButton}>儲存名稱</button></form>
-      <section className={styles.panel}><div className={styles.panelTitle}><div><p>BOOKING HOURS</p><h2>暫停預約時段</h2></div><span className={styles.statusPill}>{closedHours} 小時暫停</span></div><p className={styles.help}>選擇日期與起訖時間後儲存，即可一次暫停一整段時間的全場館預約。</p><form className={styles.closureForm} onSubmit={createClosure}><label className={styles.field}>日期<input type="date" min={today} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} required /></label><div className={styles.timeFields}><label className={styles.field}>開始<select value={closure.startHour} onChange={(event) => setClosure({ ...closure, startHour: event.target.value })}>{Array.from({ length: 15 }, (_, index) => index + 8).map((hour) => <option value={String(hour).padStart(2, "0")} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label><label className={styles.field}>結束<select value={closure.endHour} onChange={(event) => setClosure({ ...closure, endHour: event.target.value })}>{Array.from({ length: 15 }, (_, index) => index + 9).map((hour) => <option value={String(hour).padStart(2, "0")} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label></div><label className={styles.field}>原因（可不填）<input placeholder="例如：活動包場、場地維護" value={closure.note} onChange={(event) => setClosure({ ...closure, note: event.target.value })} /></label><button className={styles.primaryButton}>暫停這段時間的預約</button></form><div className={styles.ruleList}><h3>{selectedDate} 已暫停的時段</h3>{rules.length === 0 ? <p className={styles.help}>這一天目前全部開放。</p> : rules.map((rule) => <div className={styles.ruleRow} key={rule.id}><div><strong>{formatTime(rule.starts_at)}–{formatTime(rule.ends_at)}</strong><small>{rule.note || "暫停預約"}</small></div><button type="button" onClick={() => void removeRule(rule)}>恢復開放</button></div>)}</div></section>
+      <div className={styles.venueColumn}><form className={styles.panel} onSubmit={saveVenue}><div className={styles.panelTitle}><div><p>VENUE PROFILE</p><h2>場館名稱</h2></div></div><label className={styles.field}>顯示名稱<input value={venueName} maxLength={40} onChange={(event) => setVenueName(event.target.value)} /></label><p className={styles.help}>名稱會顯示在會員預約頁面與 LINE 通知。儲存後會保留。</p><button className={styles.primaryButton}>儲存名稱</button></form><section className={`${styles.panel} ${styles.calendarPanel}`}><div className={styles.calendarNav}><button type="button" onClick={() => moveMonth(-1)} aria-label="上個月">‹</button><strong>{calendarMonth.replace("-", " 年 ")} 月</strong><button type="button" onClick={() => moveMonth(1)} aria-label="下個月">›</button></div><div className={styles.weekdays}>{["日", "一", "二", "三", "四", "五", "六"].map((day) => <span key={day}>{day}</span>)}</div><div className={styles.calendarGrid}>{calendarDays.map((date, index) => date ? <button type="button" key={date} className={`${styles.calendarDay} ${selectedDate === date ? styles.selectedDay : ""} ${closedDateKeys.has(date) ? styles.hasClosure : ""}`} onClick={() => setSelectedDate(date)}><span>{index - monthRange.firstWeekday + 1}</span>{closedDateKeys.has(date) && <i aria-label="已有暫停時段" />}</button> : <span key={`empty-${index}`} />)}</div><p className={styles.help}><i className={styles.legendDot} /> 有色圓點代表當日已有暫停預約時段。</p></section></div>
+      <section className={styles.panel}><div className={styles.panelTitle}><div><p>BOOKING HOURS</p><h2>{selectedDate} 時段管理</h2></div><span className={styles.statusPill}>{closedHours} 小時暫停</span></div><p className={styles.help}>先從左側月曆選日期，再選起訖時間，即可暫停全場館預約。</p><form className={styles.closureForm} onSubmit={createClosure}><div className={styles.timeFields}><label className={styles.field}>開始<select value={closure.startHour} onChange={(event) => setClosure({ ...closure, startHour: event.target.value })}>{Array.from({ length: 15 }, (_, index) => index + 8).map((hour) => <option value={String(hour).padStart(2, "0")} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label><label className={styles.field}>結束<select value={closure.endHour} onChange={(event) => setClosure({ ...closure, endHour: event.target.value })}>{Array.from({ length: 15 }, (_, index) => index + 9).map((hour) => <option value={String(hour).padStart(2, "0")} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label></div><label className={styles.field}>原因（可不填）<input placeholder="例如：活動包場、場地維護" value={closure.note} onChange={(event) => setClosure({ ...closure, note: event.target.value })} /></label><button className={styles.primaryButton}>暫停這段時間的預約</button></form><div className={styles.ruleList}><h3>{selectedDate} 已暫停的時段</h3>{rules.length === 0 ? <p className={styles.help}>這一天目前全部開放。</p> : rules.map((rule) => <div className={styles.ruleRow} key={rule.id}><div><strong>{formatTime(rule.starts_at)}–{formatTime(rule.ends_at)}</strong><small>{rule.note || "暫停預約"}</small></div><button type="button" onClick={() => void removeRule(rule)}>恢復開放</button></div>)}</div></section>
     </section>}
     {tab === "admins" && <section className={styles.gridTwo}>
       <form className={styles.panel} onSubmit={addAdmin}><div className={styles.panelTitle}><div><p>ADD ADMIN</p><h2>新增管理人員</h2></div></div><label className={styles.field}>姓名<input placeholder="例如：李小華" value={newAdmin.name} onChange={(event) => setNewAdmin({ ...newAdmin, name: event.target.value })} required /></label><label className={styles.field}>LINE 使用者 ID<input placeholder="例如：Uxxxxxxxx" value={newAdmin.line} onChange={(event) => setNewAdmin({ ...newAdmin, line: event.target.value })} required /></label><button className={styles.primaryButton}>新增管理員</button></form>

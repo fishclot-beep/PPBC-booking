@@ -10,9 +10,13 @@ const resourceKeys: Record<string, string[]> = {
 export async function GET(request: Request) {
   try {
     await requireAdmin();
-    const date = new URL(request.url).searchParams.get("date");
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
-    const rules = await db()<{
+    const params = new URL(request.url).searchParams;
+    const date = params.get("date");
+    const from = params.get("from");
+    const to = params.get("to");
+    const validDate = (value: string | null) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+    if (!validDate(date) && !(validDate(from) && validDate(to))) return NextResponse.json({ error: "請提供 date，或 from 與 to 日期範圍。" }, { status: 400 });
+    const rules = date ? await db()<{
       id: string; rule_kind: string; starts_at: string; ends_at: string; note: string | null; resource_codes: string[];
     }[]>`
       SELECT ar.id, ar.rule_kind, ar.starts_at, ar.ends_at, ar.note,
@@ -21,6 +25,16 @@ export async function GET(request: Request) {
       LEFT JOIN availability_rule_resources arr ON arr.rule_id = ar.id
       LEFT JOIN resources r ON r.id = arr.resource_id
       WHERE ar.starts_at < (${date}::date + interval '1 day') AND ar.ends_at > ${date}::date
+      GROUP BY ar.id ORDER BY ar.starts_at
+    ` : await db()<{
+      id: string; rule_kind: string; starts_at: string; ends_at: string; note: string | null; resource_codes: string[];
+    }[]>`
+      SELECT ar.id, ar.rule_kind, ar.starts_at, ar.ends_at, ar.note,
+        coalesce(array_agg(r.code) FILTER (WHERE r.code IS NOT NULL), '{}') AS resource_codes
+      FROM availability_rules ar
+      LEFT JOIN availability_rule_resources arr ON arr.rule_id = ar.id
+      LEFT JOIN resources r ON r.id = arr.resource_id
+      WHERE ar.starts_at < ${to}::date AND ar.ends_at > ${from}::date
       GROUP BY ar.id ORDER BY ar.starts_at
     `;
     return NextResponse.json(rules);
