@@ -7,7 +7,7 @@ type LineProfile = { sub?: string; name?: string; picture?: string };
 export async function POST(request: Request) {
   try {
     const { idToken } = await request.json();
-    const channelId = process.env.LINE_CHANNEL_ID;
+    const channelId = process.env.LINE_CHANNEL_ID || "2010876193";
     if (typeof idToken !== "string" || !channelId) return NextResponse.json({ error: "LINE Login 尚未設定。" }, { status: 503 });
     const form = new URLSearchParams({ id_token: idToken, client_id: channelId });
     const verified = await fetch("https://api.line.me/oauth2/v2.1/verify", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, cache: "no-store" });

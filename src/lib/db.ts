@@ -12,9 +12,10 @@ export function db(): Sql {
   }
 
   if (!global.sportsBookingSql) {
+    const isLocalConnection = /(localhost|127\.0\.0\.1|\[::1\])/.test(connectionString);
     global.sportsBookingSql = postgres(connectionString, {
-    // Local EDB PostgreSQL uses non-TLS loopback; hosted databases can opt into TLS with DATABASE_SSL=true.
-    ssl: process.env.DATABASE_SSL === "true" ? "require" : false,
+      // Never use a plaintext connection outside localhost. DATABASE_SSL=false is accepted only for local development.
+      ssl: !isLocalConnection && process.env.DATABASE_SSL !== "false" ? "require" : false,
       max: 10,
       idle_timeout: 20,
     });

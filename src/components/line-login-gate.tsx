@@ -11,7 +11,9 @@ export function LineLoginGate({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState("正在連線至 LINE…");
 
   useEffect(() => {
-    const liffId = process.env.NEXT_PUBLIC_LINE_LIFF_ID;
+    // A LIFF ID is public by design. The fallback keeps this production app functional
+    // if Vercel has not yet rebuilt after its public environment variable was added.
+    const liffId = process.env.NEXT_PUBLIC_LINE_LIFF_ID || "2010876193-eoCnYlYX";
     if (!liffId) { setMessage("LINE LIFF 尚未設定。請在 .env.local 填入 NEXT_PUBLIC_LINE_LIFF_ID。 "); setState("error"); return; }
     const script = document.createElement("script"); script.src = "https://static.line-scdn.net/liff/edge/2/sdk.js"; script.async = true;
     script.onload = async () => {
