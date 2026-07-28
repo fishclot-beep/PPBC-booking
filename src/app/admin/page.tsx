@@ -27,6 +27,8 @@ function AdminDashboard() {
   const [rules, setRules] = useState<AvailabilityRule[]>([]);
   const [newAdmin, setNewAdmin] = useState({ name: "", line: "" });
   const today = useMemo(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Taipei" }).format(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [closure, setClosure] = useState({ startHour: "09", endHour: "10", ruleKind: "admin_lock", note: "" });
 
   const request = async <T,>(url: string, options?: RequestInit): Promise<T> => {
     const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
@@ -40,13 +42,14 @@ function AdminDashboard() {
   const loadData = async () => {
     const [venue, currentAdmins, currentMembers, currentRules] = await Promise.all([
       request<{ display_name: string }>("/api/admin/venue"), request<Admin[]>("/api/admin/admins"),
-      request<Member[]>(`/api/admin/members?q=${encodeURIComponent(memberQuery)}`), request<AvailabilityRule[]>(`/api/admin/availability?date=${today}`),
+      request<Member[]>(`/api/admin/members?q=${encodeURIComponent(memberQuery)}`), request<AvailabilityRule[]>(`/api/admin/availability?date=${selectedDate}`),
     ]);
     setVenueName(venue.display_name); setAdmins(currentAdmins); setMembers(currentMembers); setRules(currentRules);
   };
 
   useEffect(() => { void loadData().catch((issue) => { setAccessDenied(true); setError(issue instanceof Error ? issue.message : "無法取得管理權限"); }); }, []);
   useEffect(() => { if (!accessDenied) void request<Member[]>(`/api/admin/members?q=${encodeURIComponent(memberQuery)}`).then(setMembers).catch((issue) => setError(issue.message)); }, [memberQuery, accessDenied]);
+  useEffect(() => { if (!accessDenied) void request<AvailabilityRule[]>(`/api/admin/availability?date=${selectedDate}`).then(setRules).catch((issue) => setError(issue.message)); }, [selectedDate, accessDenied]);
   const saveVenue = async (event: FormEvent) => {
     event.preventDefault(); setError("");
     try { const result = await request<{ display_name: string }>("/api/admin/venue", { method: "PUT", body: JSON.stringify({ displayName: venueName }) }); setVenueName(result.display_name); setNotice("場館名稱已儲存。"); }
@@ -57,32 +60,38 @@ function AdminDashboard() {
     try { const admin = await request<Admin>("/api/admin/admins", { method: "POST", body: JSON.stringify({ displayName: newAdmin.name, lineUserId: newAdmin.line }) }); setAdmins((current) => [...current, admin]); setNewAdmin({ name: "", line: "" }); setNotice("管理人員已新增並寫入資料庫。"); }
     catch (issue) { setError(issue instanceof Error ? issue.message : "新增失敗"); }
   };
-  const ruleForHour = (hour: number) => rules.find((rule) => { const start = new Date(rule.starts_at).getHours(); const end = new Date(rule.ends_at).getHours(); return rule.rule_kind !== "full_only" && start <= hour && hour < end; });
-  const toggleHour = async (hour: number) => {
-    setError("");
+  const formatTime = (value: string) => new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+  const createClosure = async (event: FormEvent) => {
+    event.preventDefault(); setError(""); setNotice("");
+    if (Number(closure.startHour) >= Number(closure.endHour)) { setError("結束時間必須晚於開始時間。"); return; }
     try {
-      const existing = ruleForHour(hour);
-      if (existing) { await request(`/api/admin/availability`, { method: "DELETE", body: JSON.stringify({ id: existing.id }) }); setRules((current) => current.filter((rule) => rule.id !== existing.id)); setNotice(`${String(hour).padStart(2, "0")}:00 已恢復開放。`); }
-      else {
-        await request("/api/admin/availability", { method: "POST", body: JSON.stringify({ startsAt: `${today}T${String(hour).padStart(2, "0")}:00:00+08:00`, endsAt: `${today}T${String(hour + 1).padStart(2, "0")}:00:00+08:00`, resourceCodes, ruleKind: "admin_lock", note: "管理員設定暫停預約" }) });
-        setRules(await request<AvailabilityRule[]>(`/api/admin/availability?date=${today}`)); setNotice(`${String(hour).padStart(2, "0")}:00 已暫停預約。`);
-      }
+      await request("/api/admin/availability", { method: "POST", body: JSON.stringify({
+        startsAt: `${selectedDate}T${closure.startHour}:00:00+08:00`, endsAt: `${selectedDate}T${closure.endHour}:00:00+08:00`,
+        resourceCodes, ruleKind: closure.ruleKind, note: closure.note || "管理員設定暫停預約",
+      }) });
+      setRules(await request<AvailabilityRule[]>(`/api/admin/availability?date=${selectedDate}`));
+      setNotice(`${selectedDate} ${closure.startHour}:00–${closure.endHour}:00 已暫停預約。`);
     } catch (issue) { setError(issue instanceof Error ? issue.message : "時段更新失敗"); }
+  };
+  const removeRule = async (rule: AvailabilityRule) => {
+    setError(""); setNotice("");
+    try { await request("/api/admin/availability", { method: "DELETE", body: JSON.stringify({ id: rule.id }) }); setRules((current) => current.filter((item) => item.id !== rule.id)); setNotice("此暫停時段已恢復開放。"); }
+    catch (issue) { setError(issue instanceof Error ? issue.message : "時段更新失敗"); }
   };
 
   if (accessDenied) return <main className={styles.loginPage}><section className={styles.loginCard}><p>LINE ADMIN</p><h1>尚未取得後台權限</h1><span>您已使用 LINE 登入，但此 LINE 帳號尚未被設定為管理員。請由既有管理員在會員名單中授權。</span>{error && <p className={styles.error}>{error}</p>}</section></main>;
 
-  const closedHours = Array.from({ length: 16 }, (_, index) => index + 8).filter((hour) => Boolean(ruleForHour(hour)));
+  const closedHours = rules.reduce((sum, rule) => sum + Math.max(0, new Date(rule.ends_at).getTime() - new Date(rule.starts_at).getTime()) / 3_600_000, 0);
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/" className={styles.brand}>◒ {venueName}</Link><span>管理員後台</span></header>
     <section className={styles.intro}><p>ADMIN DASHBOARD</p><h1>場館管理中心</h1><span>所有後台異動會直接寫入 PostgreSQL 資料庫。</span></section>
     <nav className={styles.tabs} aria-label="管理功能">{([ ["overview", "營運看板"], ["venue", "場館與時段"], ["admins", "管理人員"], ["members", "會員名單"] ] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? styles.activeTab : ""} onClick={() => { setTab(key); setNotice(""); setError(""); }}>{label}</button>)}</nav>
     {notice && <p className={styles.notice}>{notice}</p>}{error && <p className={styles.error}>{error}</p>}
 
-    {tab === "overview" && <Overview venueName={venueName} closedCount={closedHours.length} memberCount={members.length} />}
+    {tab === "overview" && <Overview venueName={venueName} closedCount={closedHours} memberCount={members.length} />}
     {tab === "venue" && <section className={styles.gridTwo}>
       <form className={styles.panel} onSubmit={saveVenue}><div className={styles.panelTitle}><div><p>VENUE PROFILE</p><h2>場館名稱</h2></div></div><label className={styles.field}>顯示名稱<input value={venueName} maxLength={40} onChange={(event) => setVenueName(event.target.value)} /></label><p className={styles.help}>名稱會顯示在會員預約頁面與 LINE 通知。儲存後會保留。</p><button className={styles.primaryButton}>儲存名稱</button></form>
-      <section className={styles.panel}><div className={styles.panelTitle}><div><p>BOOKING HOURS</p><h2>今日預約時段</h2></div><span className={styles.statusPill}>{closedHours.length} 小時暫停</span></div><p className={styles.help}>點選時段即可立即開放或鎖定全場館預約；設定會立即寫入資料庫，供下一步會員時間軸讀取。</p><div className={styles.hourGrid}>{Array.from({ length: 16 }, (_, index) => index + 8).map((hour) => { const closed = closedHours.includes(hour); return <button className={closed ? styles.closedHour : styles.openHour} onClick={() => void toggleHour(hour)} key={hour} type="button"><strong>{String(hour).padStart(2, "0")}:00</strong><small>{closed ? "暫停預約" : "開放中"}</small></button>; })}</div></section>
+      <section className={styles.panel}><div className={styles.panelTitle}><div><p>BOOKING HOURS</p><h2>暫停預約時段</h2></div><span className={styles.statusPill}>{closedHours} 小時暫停</span></div><p className={styles.help}>選擇日期與起訖時間後儲存，即可一次暫停一整段時間的全場館預約。</p><form className={styles.closureForm} onSubmit={createClosure}><label className={styles.field}>日期<input type="date" min={today} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} required /></label><div className={styles.timeFields}><label className={styles.field}>開始<select value={closure.startHour} onChange={(event) => setClosure({ ...closure, startHour: event.target.value })}>{Array.from({ length: 15 }, (_, index) => index + 8).map((hour) => <option value={String(hour).padStart(2, "0")} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label><label className={styles.field}>結束<select value={closure.endHour} onChange={(event) => setClosure({ ...closure, endHour: event.target.value })}>{Array.from({ length: 15 }, (_, index) => index + 9).map((hour) => <option value={String(hour).padStart(2, "0")} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label></div><label className={styles.field}>原因（可不填）<input placeholder="例如：活動包場、場地維護" value={closure.note} onChange={(event) => setClosure({ ...closure, note: event.target.value })} /></label><button className={styles.primaryButton}>暫停這段時間的預約</button></form><div className={styles.ruleList}><h3>{selectedDate} 已暫停的時段</h3>{rules.length === 0 ? <p className={styles.help}>這一天目前全部開放。</p> : rules.map((rule) => <div className={styles.ruleRow} key={rule.id}><div><strong>{formatTime(rule.starts_at)}–{formatTime(rule.ends_at)}</strong><small>{rule.note || "暫停預約"}</small></div><button type="button" onClick={() => void removeRule(rule)}>恢復開放</button></div>)}</div></section>
     </section>}
     {tab === "admins" && <section className={styles.gridTwo}>
       <form className={styles.panel} onSubmit={addAdmin}><div className={styles.panelTitle}><div><p>ADD ADMIN</p><h2>新增管理人員</h2></div></div><label className={styles.field}>姓名<input placeholder="例如：李小華" value={newAdmin.name} onChange={(event) => setNewAdmin({ ...newAdmin, name: event.target.value })} required /></label><label className={styles.field}>LINE 使用者 ID<input placeholder="例如：Uxxxxxxxx" value={newAdmin.line} onChange={(event) => setNewAdmin({ ...newAdmin, line: event.target.value })} required /></label><button className={styles.primaryButton}>新增管理員</button></form>
