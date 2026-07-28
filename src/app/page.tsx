@@ -103,7 +103,7 @@ export default function BookingPage() {
   return (
     <LineLoginGate><main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="動力運動館首頁"><span>◒</span> 動力運動館</a>
+        <a className="brand" href="/" aria-label="PPBC 籃球俱樂部首頁"><span>◒</span> PPBC 籃球俱樂部</a>
         <nav><a className="active" href="/">立即預約</a><a href="#my-bookings">我的預約</a><a href="/admin">管理後台</a></nav>
       </header>
 

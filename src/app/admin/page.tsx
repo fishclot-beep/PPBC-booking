@@ -18,7 +18,7 @@ export default function AdminPage() {
 function AdminDashboard() {
   const [accessDenied, setAccessDenied] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
-  const [venueName, setVenueName] = useState("動力運動館");
+  const [venueName, setVenueName] = useState("PPBC 籃球俱樂部");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [admins, setAdmins] = useState<Admin[]>([]);

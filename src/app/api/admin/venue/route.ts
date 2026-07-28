@@ -6,7 +6,7 @@ export async function GET() {
   try {
     await requireAdmin();
     const [venue] = await db()<{ display_name: string; updated_at: string }[]>`SELECT display_name, updated_at FROM venue_settings WHERE singleton = true`;
-    return NextResponse.json(venue ?? { display_name: "動力運動館" });
+    return NextResponse.json(venue ?? { display_name: "PPBC 籃球俱樂部" });
   } catch (error) { return apiError(error); }
 }
 
