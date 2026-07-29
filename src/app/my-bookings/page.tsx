@@ -1,0 +1,7 @@
+"use client";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { LineLoginGate } from "@/components/line-login-gate";
+type Booking={id:string;seats:number;title:string;starts_at:string;ends_at:string;closed_at:string|null};
+export default function MyBookingsPage(){return <LineLoginGate><Bookings/></LineLoginGate>}
+function Bookings(){const [items,setItems]=useState<Booking[]>([]);const [error,setError]=useState("");useEffect(()=>{fetch("/api/my-reservations").then(async r=>{const p=await r.json();if(!r.ok)throw new Error(p.error);setItems(p)}).catch(e=>setError(e.message))},[]);const stamp=(v:string)=>new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",year:"numeric",month:"numeric",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(v));return <main className="app-shell"><header className="topbar"><Link className="brand" href="/">◒ PPBC 籃球俱樂部</Link><nav><Link href="/">立即預約</Link><Link className="active" href="/my-bookings">我的預約</Link></nav></header><section className="hero"><p className="eyebrow">MY BOOKINGS</p><h1>我的<em>預約紀錄。</em></h1></section><section className="booking-card"><div className="session-list">{error?<p className="notice error-notice">{error}</p>:items.length===0?<div className="empty-selection">目前沒有預約場次。</div>:items.map(item=><article className="session-card" key={item.id}><div><p className="eyebrow">{stamp(item.starts_at)}</p><h2>{item.title}</h2><span>預約 {item.seats} 人・{item.closed_at?"已結案":"已預約"}</span></div></article>)}</div></section></main>}
