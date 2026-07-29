@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { currentMember } from "@/lib/admin-auth";
+import { db, ensureSessionSchema } from "@/lib/db";
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) { try { const member = await currentMember(); await ensureSessionSchema(); const { id } = await params; const [reservation] = await db()`SELECT r.id FROM session_reservations r JOIN booking_sessions s ON s.id=r.session_id WHERE r.id=${id} AND r.member_id=${member.id} AND s.closed_at IS NULL`; if (!reservation) return NextResponse.json({ error: "找不到可取消的預約。" }, { status: 404 }); await db()`DELETE FROM session_reservations WHERE id=${id} AND member_id=${member.id}`; return new NextResponse(null, { status: 204 }); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "取消預約失敗" }, { status: 500 }); } }
