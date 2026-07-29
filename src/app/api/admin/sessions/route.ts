@@ -5,9 +5,10 @@ import { db, ensureSessionSchema } from "@/lib/db";
 const dateOk = (value: string | null) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 export async function GET(request: Request) {
   try {
-    await requireAdmin(); const date = new URL(request.url).searchParams.get("date");
-    if (!dateOk(date)) return NextResponse.json({ error: "日期格式錯誤。" }, { status: 400 });
-    return NextResponse.json(await db()`SELECT s.*, coalesce(sum(r.seats),0)::int AS booked_seats FROM booking_sessions s LEFT JOIN session_reservations r ON r.session_id=s.id WHERE s.starts_at < (${date}::date + interval '1 day') AND s.ends_at > ${date}::date GROUP BY s.id ORDER BY s.starts_at`);
+    await requireAdmin(); await ensureSessionSchema(); const params = new URL(request.url).searchParams; const date = params.get("date"); const all = params.get("all") === "1";
+    if (!all && !dateOk(date)) return NextResponse.json({ error: "日期格式錯誤。" }, { status: 400 });
+    const sessions = all ? await db()`SELECT s.*, closer.display_name AS closed_by_name, coalesce(sum(r.seats),0)::int AS booked_seats FROM booking_sessions s LEFT JOIN session_reservations r ON r.session_id=s.id LEFT JOIN members closer ON closer.id=s.closed_by GROUP BY s.id, closer.display_name ORDER BY s.starts_at DESC` : await db()`SELECT s.*, closer.display_name AS closed_by_name, coalesce(sum(r.seats),0)::int AS booked_seats FROM booking_sessions s LEFT JOIN session_reservations r ON r.session_id=s.id LEFT JOIN members closer ON closer.id=s.closed_by WHERE s.starts_at < (${date}::date + interval '1 day') AND s.ends_at > ${date}::date GROUP BY s.id, closer.display_name ORDER BY s.starts_at`;
+    return NextResponse.json(sessions);
   } catch (error) { return fail(error); }
 }
 export async function POST(request: Request) {
