@@ -18,6 +18,7 @@ export function db(): Sql {
       ssl: !isLocalConnection && process.env.DATABASE_SSL !== "false" ? "require" : false,
       max: 10,
       idle_timeout: 20,
+      prepare: false,
     });
   }
   return global.sportsBookingSql;
