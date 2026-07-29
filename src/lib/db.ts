@@ -26,6 +26,8 @@ export function db(): Sql {
 
 let sessionSchemaReady: Promise<void> | undefined;
 export function ensureSessionSchema() {
+  // Production schema is provisioned once, not during visitor requests. Set this only for a fresh local database.
+  if (process.env.DATABASE_AUTO_MIGRATE !== "true") return Promise.resolve();
   if (!sessionSchemaReady) sessionSchemaReady = (async () => {
     const sql = db();
     await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;

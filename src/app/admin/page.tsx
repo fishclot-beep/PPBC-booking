@@ -65,7 +65,7 @@ function AdminDashboard() {
   useEffect(() => { if (!accessDenied) void request<Member[]>(`/api/admin/members?q=${encodeURIComponent(memberQuery)}`).then(setMembers).catch((issue) => setError(issue.message)); }, [memberQuery, accessDenied]);
   useEffect(() => { if (!accessDenied) void request<Session[]>(`/api/admin/sessions?date=${selectedDate}`).then(setRules).catch((issue) => setError(issue.message)); }, [selectedDate, accessDenied]);
   useEffect(() => { if (!accessDenied) void request<Session[]>("/api/admin/sessions?all=1").then(setAllSessions).catch((issue) => setError(issue.message)); }, [accessDenied]);
-  useEffect(() => { if (!accessDenied) Promise.all(Array.from({ length: monthRange.lastDay }, (_, i) => request<Session[]>(`/api/admin/sessions?date=${calendarMonth}-${String(i + 1).padStart(2, "0")}`))).then((items) => setMonthRules(items.flat())).catch((issue) => setError(issue.message)); }, [calendarMonth, monthRange.lastDay, accessDenied]);
+  useEffect(() => { if (!accessDenied) void request<Session[]>(`/api/admin/sessions?month=${calendarMonth}`).then(setMonthRules).catch((issue) => setError(issue.message)); }, [calendarMonth, accessDenied]);
   const saveVenue = async (event: FormEvent) => {
     event.preventDefault(); setError("");
     try { const result = await request<{ display_name: string }>("/api/admin/venue", { method: "PUT", body: JSON.stringify({ displayName: venueName }) }); setVenueName(result.display_name); setNotice("場館名稱已儲存。"); }
