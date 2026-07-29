@@ -20,10 +20,19 @@ export function LineLoginGate({ children }: { children: ReactNode }) {
       try {
         const liff = window.liff; if (!liff) throw new Error("LIFF SDK 載入失敗。");
         await liff.init({ liffId, withLoginOnExternalBrowser: true });
-        if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
+        if (!liff.isLoggedIn()) {
+          sessionStorage.setItem("sports-booking-return-path", `${window.location.pathname}${window.location.search}`);
+          liff.login({ redirectUri: window.location.href }); return;
+        }
         const idToken = liff.getIDToken(); if (!idToken) throw new Error("未取得 LINE ID Token。請確認 LIFF 已啟用 openid scope。");
         const response = await fetch("/api/auth/line", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
         if (!response.ok) { const payload = await response.json(); throw new Error(payload.error ?? "LINE 登入失敗。"); }
+        const returnPath = sessionStorage.getItem("sports-booking-return-path");
+        if (returnPath && returnPath !== `${window.location.pathname}${window.location.search}`) {
+          sessionStorage.removeItem("sports-booking-return-path");
+          window.location.replace(returnPath); return;
+        }
+        sessionStorage.removeItem("sports-booking-return-path");
         setState("ready");
       } catch (error) { setMessage(error instanceof Error ? error.message : "LINE 登入失敗。"); setState("error"); }
     };
