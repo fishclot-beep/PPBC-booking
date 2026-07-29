@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 
-export async function POST() {
+async function optimize() {
   try {
     await requireAdmin();
     const sql = db();
@@ -16,3 +16,6 @@ export async function POST() {
     return NextResponse.json({ error: error instanceof Error ? error.message : "最佳化失敗" }, { status: 500 });
   }
 }
+
+export async function GET() { return optimize(); }
+export async function POST() { return optimize(); }
