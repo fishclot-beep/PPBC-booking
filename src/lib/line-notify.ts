@@ -43,10 +43,12 @@ export async function notifyAdminsOfBookingChange(notice: BookingNotice) {
     `人數：${count}`,
   ].join("\n");
 
-  await Promise.allSettled(admins.map(({ line_user_id }) => fetch("https://api.line.me/v2/bot/message/push", {
+  const deliveries = await Promise.allSettled(admins.map(({ line_user_id }) => fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to: line_user_id, messages: [{ type: "text", text }] }),
     cache: "no-store",
   })));
+  const failures = deliveries.filter((delivery) => delivery.status === "rejected" || !delivery.value.ok);
+  if (failures.length) console.error(`LINE 通知未送達：${failures.length}/${admins.length} 位管理員。`, failures.map((delivery) => delivery.status === "rejected" ? String(delivery.reason) : `HTTP ${delivery.value.status}`));
 }
