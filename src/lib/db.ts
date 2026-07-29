@@ -34,9 +34,7 @@ export function ensureSessionSchema() {
     await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS closed_at timestamptz`;
     await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS closed_by uuid REFERENCES members(id)`;
     await sql`CREATE TABLE IF NOT EXISTS session_reservations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), session_id uuid NOT NULL REFERENCES booking_sessions(id) ON DELETE CASCADE, member_id uuid NOT NULL REFERENCES members(id), seats integer NOT NULL DEFAULT 1 CHECK (seats BETWEEN 1 AND 30), created_at timestamptz NOT NULL DEFAULT now(), UNIQUE (session_id, member_id))`;
-    await sql`CREATE TABLE IF NOT EXISTS session_reservation_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), session_id uuid NOT NULL REFERENCES booking_sessions(id) ON DELETE CASCADE, member_id uuid NOT NULL REFERENCES members(id), seats integer NOT NULL, event_type text NOT NULL CHECK (event_type IN ('created','updated')), created_at timestamptz NOT NULL DEFAULT now())`;
-    await sql`ALTER TABLE session_reservation_events DROP CONSTRAINT IF EXISTS session_reservation_events_event_type_check`;
-    await sql`ALTER TABLE session_reservation_events ADD CONSTRAINT session_reservation_events_event_type_check CHECK (event_type IN ('created','updated','cancelled'))`;
+    await sql`CREATE TABLE IF NOT EXISTS session_reservation_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), session_id uuid NOT NULL REFERENCES booking_sessions(id) ON DELETE CASCADE, member_id uuid NOT NULL REFERENCES members(id), seats integer NOT NULL, event_type text NOT NULL CHECK (event_type IN ('created','updated','cancelled')), created_at timestamptz NOT NULL DEFAULT now())`;
   })();
   return sessionSchemaReady;
 }
