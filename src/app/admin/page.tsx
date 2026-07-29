@@ -112,7 +112,7 @@ function AdminDashboard() {
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/" className={styles.brand}>◒ {venueName}</Link><span>管理員後台</span></header>
     <section className={styles.intro}><p>ADMIN DASHBOARD</p><h1>場館管理中心</h1><span>所有後台異動會直接寫入 PostgreSQL 資料庫。</span></section>
-    <nav className={styles.tabs} aria-label="管理功能">{([ ["overview", "營運看板"], ["venue", "場館與時段"], ["admins", "管理人員"], ["members", "會員名單"] ] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? styles.activeTab : ""} onClick={() => { setTab(key); setNotice(""); setError(""); }}>{label}</button>)}</nav>
+    <nav className={styles.tabs} aria-label="管理功能">{([ ["overview", "營運看板"], ["venue", "場館與時段"], ["admins", "管理人員"], ["members", "會員名單"] ] as [Tab, string][]).map(([key, label]) => <button key={key} className={tab === key ? styles.activeTab : ""} onClick={() => { setTab(key); setNotice(""); setError(""); }}>{label}</button>)}<Link href="/admin/notifications" className={styles.notificationLink}>通知綁定</Link></nav>
     {notice && <p className={styles.notice}>{notice}</p>}{error && <p className={styles.error}>{error}</p>}
 
     {tab === "overview" && <><Operations sessions={allSessions} admins={admins} values={collectedAmounts} collectors={collectors} setValues={setCollectedAmounts} setCollectors={setCollectors} closeSession={closeSession} reopenSession={reopenSession} expectedAmount={expectedAmount} /><SettlementHistory sessions={allSessions} reopenSession={reopenSession} expectedAmount={expectedAmount} /><ReservationAudit sessions={allSessions.filter((session) => !session.closed_at)} /></>}
