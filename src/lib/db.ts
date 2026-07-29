@@ -35,6 +35,8 @@ export function ensureSessionSchema() {
     await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS closed_by uuid REFERENCES members(id)`;
     await sql`CREATE TABLE IF NOT EXISTS session_reservations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), session_id uuid NOT NULL REFERENCES booking_sessions(id) ON DELETE CASCADE, member_id uuid NOT NULL REFERENCES members(id), seats integer NOT NULL DEFAULT 1 CHECK (seats BETWEEN 1 AND 30), created_at timestamptz NOT NULL DEFAULT now(), UNIQUE (session_id, member_id))`;
     await sql`CREATE TABLE IF NOT EXISTS session_reservation_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), session_id uuid NOT NULL REFERENCES booking_sessions(id) ON DELETE CASCADE, member_id uuid NOT NULL REFERENCES members(id), seats integer NOT NULL, event_type text NOT NULL CHECK (event_type IN ('created','updated','cancelled')), created_at timestamptz NOT NULL DEFAULT now())`;
+    await sql`ALTER TABLE members ADD COLUMN IF NOT EXISTS messaging_line_user_id text`;
+    await sql`CREATE TABLE IF NOT EXISTS line_notification_links (code text PRIMARY KEY, member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE, expires_at timestamptz NOT NULL, consumed_at timestamptz)`;
   })();
   return sessionSchemaReady;
 }

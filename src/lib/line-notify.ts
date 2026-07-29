@@ -25,9 +25,9 @@ export async function notifyAdminsOfBookingChange(notice: BookingNotice) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) return;
 
-  const admins = await db()<{ line_user_id: string }[]>`
-    SELECT line_user_id FROM members
-    WHERE role = 'admin' AND line_user_id <> ''
+  const admins = await db()<{ messaging_line_user_id: string }[]>`
+    SELECT messaging_line_user_id FROM members
+    WHERE role = 'admin' AND messaging_line_user_id IS NOT NULL AND messaging_line_user_id <> ''
   `;
   if (admins.length === 0) return;
 
@@ -43,10 +43,10 @@ export async function notifyAdminsOfBookingChange(notice: BookingNotice) {
     `人數：${count}`,
   ].join("\n");
 
-  const deliveries = await Promise.allSettled(admins.map(({ line_user_id }) => fetch("https://api.line.me/v2/bot/message/push", {
+  const deliveries = await Promise.allSettled(admins.map(({ messaging_line_user_id }) => fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to: line_user_id, messages: [{ type: "text", text }] }),
+    body: JSON.stringify({ to: messaging_line_user_id, messages: [{ type: "text", text }] }),
     cache: "no-store",
   })));
   const failures = deliveries.filter((delivery) => delivery.status === "rejected" || !delivery.value.ok);
