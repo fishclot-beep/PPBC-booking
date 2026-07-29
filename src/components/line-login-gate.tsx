@@ -3,12 +3,17 @@
 import { ReactNode, useEffect, useState } from "react";
 
 declare global {
-  interface Window { liff?: { init: (config: { liffId: string; withLoginOnExternalBrowser?: boolean }) => Promise<void>; isLoggedIn: () => boolean; login: (options?: { redirectUri?: string }) => void; getIDToken: () => string | null }; }
+  interface Window { liff?: { init: (config: { liffId: string; withLoginOnExternalBrowser?: boolean }) => Promise<void>; isLoggedIn: () => boolean; login: (options?: { redirectUri?: string }) => void; logout: () => void; getIDToken: () => string | null }; }
 }
 
 export function LineLoginGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState("正在連線至 LINE…");
+  const retryLogin = async () => {
+    await fetch("/api/auth/me", { method: "DELETE" }).catch(() => undefined);
+    window.liff?.logout();
+    window.location.reload();
+  };
 
   useEffect(() => {
     // A LIFF ID is public by design. The fallback keeps this production app functional
@@ -41,5 +46,5 @@ export function LineLoginGate({ children }: { children: ReactNode }) {
   }, []);
 
   if (state === "ready") return <>{children}</>;
-  return <main className="line-login-state"><section><p>LINE LOGIN</p><h1>{state === "loading" ? "正在登入" : "尚未完成 LINE 設定"}</h1><span>{message}</span></section></main>;
+  return <main className="line-login-state"><section><p>LINE LOGIN</p><h1>{state === "loading" ? "正在登入" : "尚未完成 LINE 設定"}</h1><span>{message}</span>{state === "error" && <button className="line-retry" onClick={() => void retryLogin()}>重新登入 LINE</button>}</section></main>;
 }
