@@ -31,7 +31,8 @@ export function ensureSessionSchema() {
   if (!sessionSchemaReady) sessionSchemaReady = (async () => {
     const sql = db();
     await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
-    await sql`CREATE TABLE IF NOT EXISTS booking_sessions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, capacity integer NOT NULL DEFAULT 0 CHECK (capacity BETWEEN 0 AND 30), price_type text NOT NULL CHECK (price_type IN ('private', 'per_person')), price_amount numeric(10,2) NOT NULL DEFAULT 0 CHECK (price_amount >= 0), created_by uuid NOT NULL REFERENCES members(id), created_at timestamptz NOT NULL DEFAULT now(), CHECK (ends_at > starts_at))`;
+    await sql`CREATE TABLE IF NOT EXISTS booking_sessions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, note text, starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, capacity integer NOT NULL DEFAULT 0 CHECK (capacity BETWEEN 0 AND 30), price_type text NOT NULL CHECK (price_type IN ('private', 'per_person')), price_amount numeric(10,2) NOT NULL DEFAULT 0 CHECK (price_amount >= 0), created_by uuid NOT NULL REFERENCES members(id), created_at timestamptz NOT NULL DEFAULT now(), CHECK (ends_at > starts_at))`;
+    await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS note text`;
     await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS actual_collected numeric(10,2)`;
     await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS closed_at timestamptz`;
     await sql`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS closed_by uuid REFERENCES members(id)`;

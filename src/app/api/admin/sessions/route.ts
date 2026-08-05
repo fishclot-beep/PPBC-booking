@@ -23,10 +23,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const admin = await requireAdmin(); const { title, startsAt, endsAt, capacity, priceType, priceAmount } = await request.json();
-    if (typeof title !== "string" || !title.trim() || title.trim().length > 80 || typeof startsAt !== "string" || typeof endsAt !== "string" || !Number.isInteger(capacity) || capacity < 0 || capacity > 30 || !["private", "per_person"].includes(priceType) || typeof priceAmount !== "number" || priceAmount < 0) return NextResponse.json({ error: "場次資料無效。" }, { status: 400 });
+    const admin = await requireAdmin(); const { title, note, startsAt, endsAt, capacity, priceType, priceAmount } = await request.json();
+    if (typeof title !== "string" || !title.trim() || title.trim().length > 80 || (typeof note !== "undefined" && (typeof note !== "string" || note.length > 500)) || typeof startsAt !== "string" || typeof endsAt !== "string" || !Number.isInteger(capacity) || capacity < 0 || capacity > 30 || !["private", "per_person"].includes(priceType) || typeof priceAmount !== "number" || priceAmount < 0) return NextResponse.json({ error: "場次資料無效。" }, { status: 400 });
     const start = new Date(startsAt); const end = new Date(endsAt); if (Number.isNaN(+start) || Number.isNaN(+end) || start >= end) return NextResponse.json({ error: "時間範圍無效。" }, { status: 400 });
-    const [session] = await db()`INSERT INTO booking_sessions (title, starts_at, ends_at, capacity, price_type, price_amount, created_by) VALUES (${title.trim()}, ${start.toISOString()}, ${end.toISOString()}, ${capacity}, ${priceType}, ${priceAmount}, ${admin.id}) RETURNING *`;
+    await db()`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS note text`;
+    const [session] = await db()`INSERT INTO booking_sessions (title, note, starts_at, ends_at, capacity, price_type, price_amount, created_by) VALUES (${title.trim()}, ${typeof note === "string" ? note.trim() || null : null}, ${start.toISOString()}, ${end.toISOString()}, ${capacity}, ${priceType}, ${priceAmount}, ${admin.id}) RETURNING *`;
     return NextResponse.json(session, { status: 201 });
   } catch (error) { return fail(error); }
 }
