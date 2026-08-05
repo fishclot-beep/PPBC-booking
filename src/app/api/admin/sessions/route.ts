@@ -34,8 +34,20 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const admin = await requireAdmin(); await ensureSessionSchema(); const { id, actualCollected, collectorId, reopen } = await request.json();
+    const admin = await requireAdmin(); await ensureSessionSchema(); const body = await request.json(); const { id, actualCollected, collectorId, reopen } = body;
     if (typeof id !== "string") return NextResponse.json({ error: "場次資料無效。" }, { status: 400 });
+    if (typeof body.title === "string") {
+      const { title, note, startsAt, endsAt, capacity, priceType, priceAmount } = body;
+      if (!title.trim() || title.trim().length > 80 || (typeof note !== "undefined" && (typeof note !== "string" || note.length > 500)) || typeof startsAt !== "string" || typeof endsAt !== "string" || !Number.isInteger(capacity) || capacity < 0 || capacity > 30 || !["private", "per_person"].includes(priceType) || typeof priceAmount !== "number" || priceAmount < 0) return NextResponse.json({ error: "場次資料無效。" }, { status: 400 });
+      const start = new Date(startsAt); const end = new Date(endsAt); if (Number.isNaN(+start) || Number.isNaN(+end) || start >= end) return NextResponse.json({ error: "時間範圍無效。" }, { status: 400 });
+      const [current] = await db()<{ booked_seats: number; closed_at: string | null }[]>`SELECT s.closed_at, coalesce(sum(r.seats),0)::int AS booked_seats FROM booking_sessions s LEFT JOIN session_reservations r ON r.session_id=s.id WHERE s.id=${id} GROUP BY s.id`;
+      if (!current) return NextResponse.json({ error: "找不到場次。" }, { status: 404 });
+      if (current.closed_at) return NextResponse.json({ error: "已結案場次不可修改。" }, { status: 400 });
+      if (capacity !== 0 && capacity < current.booked_seats) return NextResponse.json({ error: `人數上限不可低於目前已預約的 ${current.booked_seats} 人。` }, { status: 400 });
+      await db()`ALTER TABLE booking_sessions ADD COLUMN IF NOT EXISTS note text`;
+      const [updated] = await db()`UPDATE booking_sessions SET title=${title.trim()}, note=${typeof note === "string" ? note.trim() || null : null}, starts_at=${start.toISOString()}, ends_at=${end.toISOString()}, capacity=${capacity}, price_type=${priceType}, price_amount=${priceAmount} WHERE id=${id} RETURNING *`;
+      return NextResponse.json({ ...updated, booked_seats: current.booked_seats });
+    }
     if (reopen === true) { const [session] = await db()`UPDATE booking_sessions SET actual_collected=NULL, closed_at=NULL, closed_by=NULL WHERE id=${id} RETURNING *`; return NextResponse.json(session); }
     if (typeof actualCollected !== "number" || actualCollected < 0) return NextResponse.json({ error: "實收金額無效。" }, { status: 400 });
     const collector = typeof collectorId === "string" ? collectorId : admin.id;
